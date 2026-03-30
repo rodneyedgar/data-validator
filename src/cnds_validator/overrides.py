@@ -42,6 +42,7 @@ class OverrideConfig:
     export_mode: str = OVERRIDE_EXPORT_FULL_AND_SPLIT
     field_values: dict[str, str] = field(default_factory=dict)
     normalize_application_person_id: bool = False
+    uppercase_all_data: bool = False
     cleanup_name_spaces: bool = False
     cleanup_name_hyphens: bool = False
     cleanup_name_apostrophes: bool = False
@@ -51,6 +52,7 @@ class OverrideConfig:
         return (
             bool(self.field_values)
             or self.normalize_application_person_id
+            or self.uppercase_all_data
             or self.cleanup_name_spaces
             or self.cleanup_name_hyphens
             or self.cleanup_name_apostrophes
@@ -122,6 +124,10 @@ def apply_overrides_to_fields(fields: dict[str, str], profile: FileProfile, conf
             field = field_specs[field_name]
             cleaned_value = updated_fields[field_name].translate(remove_chars).strip()
             updated_fields[field_name] = _fixed_width(cleaned_value, field.length)
+
+    if config.uppercase_all_data:
+        for field in profile.fields:
+            updated_fields[field.name] = _fixed_width(updated_fields.get(field.name, "").upper(), field.length)
 
     return updated_fields
 

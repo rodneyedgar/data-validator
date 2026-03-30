@@ -24,6 +24,14 @@ from .ccipr60i import (
     write_ccipr60i_binary,
     write_ccipr60i_text,
 )
+from .ccipr10h import (
+    CCIPR10H_BINARY_FILE_NAME,
+    CCIPR10H_TEXT_FILE_NAME,
+    build_ccipr10h_record,
+    validate_ccipr10h_binary_file,
+    write_ccipr10h_binary,
+    write_ccipr10h_text,
+)
 from .exporters import export_defects_csv_records, export_records
 from .overrides import (
     OVERRIDE_EXPORT_FULL_AND_SPLIT,
@@ -87,6 +95,10 @@ CONVERSION_OUTPUT_FILE_NAMES = (
     CCIPR60I_TEXT_FILE_NAME,
     CCIPR60I_BINARY_FILE_NAME,
 )
+CONVERSION_10H_OUTPUT_FILE_NAMES = (
+    CCIPR10H_TEXT_FILE_NAME,
+    CCIPR10H_BINARY_FILE_NAME,
+)
 
 
 class ValidatorApp:
@@ -108,6 +120,11 @@ class ValidatorApp:
         self.selected_ignored_fields: set[str] = set()
         self.override_config = OverrideConfig()
         self.conversion_config = ConversionConfig()
+        self.conversion_10h_config = ConversionConfig(
+            testing_comment="CCIUPDATE",
+            last_changed_program_id="CCIBTH10",
+            last_changed_user_id="",
+        )
         self.field_labels = {field.name: field.label for field in self.profile.fields}
 
         self._build()
@@ -136,10 +153,12 @@ class ValidatorApp:
         self.summary_button.grid(row=0, column=6, padx=4)
         self.export_button = ttk.Button(controls, text="Export Results", command=self.export_results, underline=0)
         self.export_button.grid(row=0, column=7, padx=4)
-        self.convert_button = ttk.Button(controls, text="CCIPR60I...", command=self.open_conversion_dialog, underline=0)
+        self.convert_button = ttk.Button(controls, text="CCIPR60I...", command=self.open_conversion_dialog, underline=5)
         self.convert_button.grid(row=0, column=8, padx=4)
+        self.convert10h_button = ttk.Button(controls, text="CCIPR10H...", command=self.open_conversion10h_dialog, underline=5)
+        self.convert10h_button.grid(row=0, column=9, padx=4)
         self.help_button = ttk.Button(controls, text="Help", command=self.open_keyboard_help_dialog, underline=0)
-        self.help_button.grid(row=0, column=9, padx=4)
+        self.help_button.grid(row=0, column=10, padx=4)
 
         profile_frame = ttk.LabelFrame(root_frame, text="Profile", padding=12, style="Card.TLabelframe")
         profile_frame.pack(fill="x", pady=(12, 0))
@@ -154,7 +173,7 @@ class ValidatorApp:
         main_pane.pack(fill="both", expand=True, pady=(12, 0))
 
         top_pane = ttk.Panedwindow(main_pane, orient="horizontal")
-        main_pane.add(top_pane, weight=3)
+        main_pane.add(top_pane, weight=5)
 
         records_frame = ttk.Labelframe(top_pane, text="Record Status", padding=8, style="Card.TLabelframe")
         preview_frame = ttk.Labelframe(top_pane, text="Record Preview", padding=8, style="Card.TLabelframe")
@@ -162,7 +181,7 @@ class ValidatorApp:
         top_pane.add(preview_frame, weight=3)
 
         defects_frame = ttk.Labelframe(main_pane, text="Defects", padding=8, style="Card.TLabelframe")
-        main_pane.add(defects_frame, weight=2)
+        main_pane.add(defects_frame, weight=1)
 
         filter_row = ttk.Frame(records_frame, style="App.TFrame")
         filter_row.pack(fill="x", pady=(0, 8))
@@ -173,7 +192,7 @@ class ValidatorApp:
 
         records_container = ttk.Frame(records_frame, style="App.TFrame")
         records_container.pack(fill="both", expand=True)
-        self.records_tree = ttk.Treeview(records_container, columns=("source", "line", "status", "issue_count", "duplicate_count"), show="headings", height=12, selectmode="browse")
+        self.records_tree = ttk.Treeview(records_container, columns=("source", "line", "status", "issue_count", "duplicate_count"), show="headings", height=13, selectmode="browse")
         records_column_config = {
             "source": (220, "w"),
             "line": (70, "e"),
@@ -192,11 +211,11 @@ class ValidatorApp:
 
         preview_container = ttk.Frame(preview_frame, style="App.TFrame")
         preview_container.pack(fill="both", expand=True)
-        self.preview_tree = ttk.Treeview(preview_container, columns=("field", "positions", "value"), show="headings", height=12)
+        self.preview_tree = ttk.Treeview(preview_container, columns=("field", "positions", "value"), show="headings", height=13)
         preview_column_config = {
-            "field": (170, 150, False, "w"),
+            "field": (260, 220, False, "w"),
             "positions": (95, 95, False, "e"),
-            "value": (540, 260, True, "w"),
+            "value": (450, 260, True, "w"),
         }
         for name, (width, minwidth, stretch, anchor) in preview_column_config.items():
             self.preview_tree.heading(name, text=name.replace("_", " ").title(), anchor=anchor)
@@ -213,7 +232,7 @@ class ValidatorApp:
 
         defects_container = ttk.Frame(defects_frame, style="App.TFrame")
         defects_container.pack(fill="both", expand=True)
-        self.defects_tree = ttk.Treeview(defects_container, columns=("source", "line", "field", "positions", "code", "message", "supplied_value"), show="headings", height=16)
+        self.defects_tree = ttk.Treeview(defects_container, columns=("source", "line", "field", "positions", "code", "message", "supplied_value"), show="headings", height=8)
         defects_column_config = {
             "source": (220, "w"),
             "line": (70, "e"),
@@ -239,7 +258,8 @@ class ValidatorApp:
         self._bind_alt_shortcut(self.root, "v", self.on_alt_validate)
         self._bind_alt_shortcut(self.root, "m", self.on_alt_summary)
         self._bind_alt_shortcut(self.root, "e", self.on_alt_export)
-        self._bind_alt_shortcut(self.root, "c", self.on_alt_convert)
+        self._bind_alt_shortcut(self.root, "6", self.on_alt_convert)
+        self._bind_alt_shortcut(self.root, "1", self.on_alt_convert_10h)
         self._bind_alt_shortcut(self.root, "f", self.on_alt_focus_filter)
         self._bind_alt_shortcut(self.root, "r", self.on_alt_focus_records)
         self._bind_alt_shortcut(self.root, "p", self.on_alt_focus_preview)
@@ -350,6 +370,8 @@ class ValidatorApp:
             parts.append("Fields: " + ", ".join(field_parts))
         if self.override_config.normalize_application_person_id:
             parts.append("Normalize Application Person ID")
+        if self.override_config.uppercase_all_data:
+            parts.append("Convert all data to uppercase")
         cleanup_parts: list[str] = []
         if self.override_config.cleanup_name_spaces:
             cleanup_parts.append("spaces")
@@ -368,6 +390,7 @@ class ValidatorApp:
         self.summary_button.configure(state="normal" if has_result else "disabled")
         self.export_button.configure(state="normal" if has_result else "disabled")
         self.convert_button.configure(state="normal" if has_result else "disabled")
+        self.convert10h_button.configure(state="normal" if has_result else "disabled")
 
     def on_alt_browse(self, _event: tk.Event) -> str:
         self.choose_files()
@@ -399,6 +422,11 @@ class ValidatorApp:
     def on_alt_convert(self, _event: tk.Event) -> str:
         if str(self.convert_button.cget("state")) != "disabled":
             self.open_conversion_dialog()
+        return "break"
+
+    def on_alt_convert_10h(self, _event: tk.Event) -> str:
+        if str(self.convert10h_button.cget("state")) != "disabled":
+            self.open_conversion10h_dialog()
         return "break"
 
     def on_alt_focus_filter(self, _event: tk.Event) -> str:
@@ -457,7 +485,8 @@ class ValidatorApp:
             ("Alt+V", "Validate selected files"),
             ("Alt+M", "Open Summary dialog"),
             ("Alt+E", "Export results"),
-            ("Alt+C", "Open CCIPR60I conversion export"),
+            ("Alt+6", "Open CCIPR60I conversion export"),
+            ("Alt+1", "Open CCIPR10H conversion export"),
             ("Alt+F", "Move focus to the Show filter"),
             ("Alt+R", "Move focus to Record Status"),
             ("Alt+P", "Move focus to Record Preview"),
@@ -613,6 +642,7 @@ class ValidatorApp:
             for field_name in OVERRIDE_FIELD_NAMES
         }
         normalize_var = tk.BooleanVar(value=self.override_config.normalize_application_person_id)
+        uppercase_var = tk.BooleanVar(value=self.override_config.uppercase_all_data)
         cleanup_spaces_var = tk.BooleanVar(value=self.override_config.cleanup_name_spaces)
         cleanup_hyphens_var = tk.BooleanVar(value=self.override_config.cleanup_name_hyphens)
         cleanup_apostrophes_var = tk.BooleanVar(value=self.override_config.cleanup_name_apostrophes)
@@ -659,6 +689,7 @@ class ValidatorApp:
         ttk.Label(notes_frame, text="Overrides are applied during export review. Duplicate records are skipped.", style="Muted.TLabel", wraplength=920).pack(anchor="w")
         ttk.Label(notes_frame, text="Records updated by overrides are revalidated before they are written out.", style="Muted.TLabel", wraplength=920).pack(anchor="w", pady=(4, 0))
         ttk.Label(notes_frame, text="Race overrides apply only when the record has a missing or invalid race condition.", style="Muted.TLabel", wraplength=920).pack(anchor="w", pady=(4, 0))
+        ttk.Label(notes_frame, text="Uppercase override converts all exported data values to uppercase before the corrected record is written.", style="Muted.TLabel", wraplength=920).pack(anchor="w", pady=(4, 0))
         ttk.Label(notes_frame, text="Last/First cleanup can remove spaces, hyphens, and apostrophes independently within Last Name, First Name, and First Name Filler.", style="Muted.TLabel", wraplength=920).pack(anchor="w", pady=(4, 0))
 
         options_frame = ttk.LabelFrame(content, text="Additional Options", padding=12, style="Card.TLabelframe")
@@ -671,6 +702,14 @@ class ValidatorApp:
             command=lambda: schedule_preview_counts(),
         )
         normalize_check.pack(anchor="w")
+
+        uppercase_check = ttk.Checkbutton(
+            options_frame,
+            text="Convert all data to uppercase",
+            variable=uppercase_var,
+            command=lambda: schedule_preview_counts(),
+        )
+        uppercase_check.pack(anchor="w", pady=(6, 0))
 
         ttk.Label(options_frame, text=LAST_FIRST_CLEANUP_LABEL, style="App.TLabel").pack(anchor="w", pady=(10, 0))
 
@@ -715,6 +754,7 @@ class ValidatorApp:
                 export_mode=OVERRIDE_EXPORT_MODE_LABELS[export_mode_var.get()],
                 field_values=field_values,
                 normalize_application_person_id=normalize_var.get(),
+                uppercase_all_data=uppercase_var.get(),
                 cleanup_name_spaces=cleanup_spaces_var.get(),
                 cleanup_name_hyphens=cleanup_hyphens_var.get(),
                 cleanup_name_apostrophes=cleanup_apostrophes_var.get(),
@@ -763,6 +803,7 @@ class ValidatorApp:
                 override_vars[field_name].set(False)
                 override_value_vars[field_name].set("")
             normalize_var.set(False)
+            uppercase_var.set(False)
             cleanup_spaces_var.set(False)
             cleanup_hyphens_var.set(False)
             cleanup_apostrophes_var.set(False)
@@ -939,13 +980,18 @@ class ValidatorApp:
 
         dialog.wait_window()
 
-    def open_conversion_dialog(self) -> None:
+    def _open_conversion_dialog(
+        self,
+        title: str,
+        current_config: ConversionConfig,
+        export_callback: Callable[[ConversionConfig], None],
+    ) -> None:
         if self.result is None:
-            messagebox.showwarning("No conversion available", "Validate files before opening CCIPR60I conversion.")
+            messagebox.showwarning("No conversion available", "Validate files before opening conversion.")
             return
 
         dialog, close_dialog = self._create_modal_dialog(
-            "CCIPR60I Conversion",
+            title,
             980,
             620,
             resizable=(False, False),
@@ -957,12 +1003,12 @@ class ValidatorApp:
         frame.pack(fill="both", expand=True)
         frame.columnconfigure(1, weight=1)
 
-        scope_var = tk.StringVar(value=CONVERSION_SCOPE_REVERSE[self.conversion_config.scope])
-        format_var = tk.StringVar(value=CONVERSION_FORMAT_REVERSE[self.conversion_config.output_format])
-        accounting_var = tk.StringVar(value=self.conversion_config.accounting_info)
-        comment_var = tk.StringVar(value=self.conversion_config.testing_comment)
-        program_var = tk.StringVar(value=self.conversion_config.last_changed_program_id)
-        user_var = tk.StringVar(value=self.conversion_config.last_changed_user_id)
+        scope_var = tk.StringVar(value=CONVERSION_SCOPE_REVERSE[current_config.scope])
+        format_var = tk.StringVar(value=CONVERSION_FORMAT_REVERSE[current_config.output_format])
+        accounting_var = tk.StringVar(value=current_config.accounting_info)
+        comment_var = tk.StringVar(value=current_config.testing_comment)
+        program_var = tk.StringVar(value=current_config.last_changed_program_id)
+        user_var = tk.StringVar(value=current_config.last_changed_user_id)
         preview_var = tk.StringVar()
 
         self._bind_entry_var(accounting_var, 6)
@@ -975,8 +1021,7 @@ class ValidatorApp:
         scope_box.grid(row=0, column=1, sticky="w", padx=(12, 0))
 
         ttk.Label(frame, text="Output format", style="App.TLabel").grid(row=1, column=0, sticky="w", pady=(12, 0))
-        format_box = ttk.Combobox(frame, textvariable=format_var, values=tuple(CONVERSION_FORMAT_LABELS.keys()), state="readonly", width=24)
-        format_box.grid(row=1, column=1, sticky="w", padx=(12, 0), pady=(12, 0))
+        ttk.Combobox(frame, textvariable=format_var, values=tuple(CONVERSION_FORMAT_LABELS.keys()), state="readonly", width=24).grid(row=1, column=1, sticky="w", padx=(12, 0), pady=(12, 0))
 
         ttk.Label(frame, text="Accounting Info", style="App.TLabel").grid(row=2, column=0, sticky="w", pady=(18, 0))
         ttk.Entry(frame, textvariable=accounting_var, width=8).grid(row=2, column=1, sticky="w", padx=(12, 0), pady=(18, 0))
@@ -1009,19 +1054,23 @@ class ValidatorApp:
             return ConversionConfig(
                 scope=CONVERSION_SCOPE_LABELS[scope_var.get()],
                 output_format=CONVERSION_FORMAT_LABELS[format_var.get()],
-                accounting_info=accounting_var.get().strip().upper() or "DHRCCI",
-                testing_comment=comment_var.get().strip().upper() or "CCICREATE",
-                last_changed_program_id=program_var.get().strip().upper() or "CCIBTH60",
+                accounting_info=accounting_var.get().strip().upper() or current_config.accounting_info,
+                testing_comment=comment_var.get().strip().upper() or current_config.testing_comment,
+                last_changed_program_id=program_var.get().strip().upper() or current_config.last_changed_program_id,
                 last_changed_user_id=user_var.get().strip().upper(),
             )
 
         def refresh_preview(*_args) -> None:
             config = build_temp_config()
-            eligible_records = self._conversion_source_records(config)
+            eligible_records = self._conversion_source_records(config, self.override_config)
+            override_note = ""
+            if config.scope == CONVERSION_SCOPE_VALID_AND_CORRECTED and self.override_config.has_overrides:
+                override_note = f" Override state: {self.override_status_text()}"
             preview_var.set(
                 f"Eligible records for conversion: {len(eligible_records)}. "
                 f"Defaults in use: Accounting Info {config.accounting_info}, Testing Comment {config.testing_comment}, "
                 f"Program ID {config.last_changed_program_id}, User ID {config.last_changed_user_id or '<blank>'}."
+                f"{override_note}"
             )
 
         for variable in (scope_var, format_var, accounting_var, comment_var, program_var, user_var):
@@ -1032,9 +1081,9 @@ class ValidatorApp:
         button_row.grid(row=7, column=0, columnspan=2, sticky="e", pady=(18, 0))
 
         def apply_and_export() -> None:
-            self.conversion_config = build_temp_config()
+            config = build_temp_config()
             close_dialog()
-            self.export_ccipr60i()
+            export_callback(config)
 
         cancel_button = ttk.Button(button_row, text="Cancel", command=close_dialog, underline=0)
         cancel_button.pack(side="right")
@@ -1047,6 +1096,20 @@ class ValidatorApp:
         self._bind_alt_shortcut(dialog, "x", lambda _event: (export_button.invoke(), "break")[1])
         self._bind_alt_shortcut(dialog, "c", lambda _event: (cancel_button.invoke(), "break")[1])
         dialog.wait_window()
+
+    def open_conversion_dialog(self) -> None:
+        self._open_conversion_dialog(
+            "CCIPR60I Conversion",
+            self.conversion_config,
+            self.export_ccipr60i,
+        )
+
+    def open_conversion10h_dialog(self) -> None:
+        self._open_conversion_dialog(
+            "CCIPR10H Conversion",
+            self.conversion_10h_config,
+            self.export_ccipr10h,
+        )
 
     def _record_after_overrides(self, record: RecordResult, config: OverrideConfig | None = None) -> RecordResult:
         config = config or self.override_config
@@ -1145,6 +1208,11 @@ class ValidatorApp:
         self.selected_ignored_fields = set()
         self.override_config = OverrideConfig()
         self.conversion_config = ConversionConfig()
+        self.conversion_10h_config = ConversionConfig(
+            testing_comment="CCIUPDATE",
+            last_changed_program_id="CCIBTH10",
+            last_changed_user_id="",
+        )
 
     def choose_files(self) -> None:
         selected = filedialog.askopenfilenames(title="Select CNDS Files", filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
@@ -1320,18 +1388,22 @@ class ValidatorApp:
     def _managed_export_paths(self, target_dir: Path) -> tuple[Path, ...]:
         return tuple(target_dir / file_name for file_name in EXPORT_OUTPUT_FILE_NAMES)
 
-    def _managed_conversion_paths(self, target_dir: Path) -> tuple[Path, ...]:
-        return tuple(target_dir / file_name for file_name in CONVERSION_OUTPUT_FILE_NAMES)
+    def _managed_conversion_paths(self, target_dir: Path, file_names: tuple[str, ...] = CONVERSION_OUTPUT_FILE_NAMES) -> tuple[Path, ...]:
+        return tuple(target_dir / file_name for file_name in file_names)
 
     def _binary_validation_notes(self, summary: BinaryValidationSummary) -> tuple[str, ...]:
         return (f"Binary file validated: {summary.record_count} record(s).",)
 
-    def _conversion_source_records(self, config: ConversionConfig | None = None) -> tuple[RecordResult, ...]:
+    def _conversion_source_records(
+        self,
+        config: ConversionConfig | None = None,
+        override_config: OverrideConfig | None = None,
+    ) -> tuple[RecordResult, ...]:
         if self.result is None:
             return ()
         config = config or self.conversion_config
         if config.scope == CONVERSION_SCOPE_VALID_AND_CORRECTED:
-            source_records = self._review_records()
+            source_records = self._review_records(override_config)
         else:
             source_records = self.result.records
         return tuple(
@@ -1345,22 +1417,40 @@ class ValidatorApp:
             )
         )
 
-    def export_ccipr60i(self) -> None:
+    def _export_conversion(
+        self,
+        *,
+        conversion_name: str,
+        config: ConversionConfig,
+        override_config: OverrideConfig,
+        config_attr: str,
+        output_file_names: tuple[str, str],
+        dialog_title: str,
+        overwrite_title: str,
+        overwrite_message: str,
+        no_eligible_message: str,
+        build_record: Callable[[RecordResult, ConversionConfig], str],
+        write_text: Callable[[Path, list[str]], None],
+        write_binary: Callable[[Path, list[str]], None],
+        validate_binary: Callable[[Path], BinaryValidationSummary],
+    ) -> None:
         if self.result is None:
-            messagebox.showwarning("Nothing to convert", "Validate files before exporting CCIPR60I.")
+            messagebox.showwarning("Nothing to convert", f"Validate files before exporting {conversion_name}.")
             return
-        output_dir = filedialog.askdirectory(title="Choose CCIPR60I Export Folder")
+
+        output_dir = filedialog.askdirectory(title=dialog_title)
         if not output_dir:
             return
-        target_dir = Path(output_dir)
-        text_path = target_dir / CCIPR60I_TEXT_FILE_NAME
-        binary_path = target_dir / CCIPR60I_BINARY_FILE_NAME
 
-        existing_paths = [path for path in self._managed_conversion_paths(target_dir) if path.exists()]
+        target_dir = Path(output_dir)
+        text_path = target_dir / output_file_names[0]
+        binary_path = target_dir / output_file_names[1]
+
+        existing_paths = [path for path in self._managed_conversion_paths(target_dir, output_file_names) if path.exists()]
         if existing_paths:
             overwrite = messagebox.askyesno(
-                "Overwrite Existing CCIPR60I Files",
-                "One or more CCIPR60I export files already exist in this folder. Overwrite them and remove stale output files first?",
+                overwrite_title,
+                overwrite_message,
                 parent=self.root,
             )
             if not overwrite:
@@ -1368,29 +1458,70 @@ class ValidatorApp:
             for path in existing_paths:
                 path.unlink()
 
-        source_records = self._conversion_source_records()
+        source_records = self._conversion_source_records(config, override_config)
         if not source_records:
-            messagebox.showwarning("No eligible records", "No records match the selected CCIPR60I conversion scope.")
+            messagebox.showwarning("No eligible records", no_eligible_message)
             return
 
-        converted_records = [build_ccipr60i_record(record, self.conversion_config) for record in source_records]
-        exported_paths: list[Path] = []
-        validation_notes: list[str] = []
-        if self.conversion_config.output_format in (CONVERSION_FORMAT_BOTH, CONVERSION_FORMAT_TEXT):
-            write_ccipr60i_text(text_path, converted_records)
-            exported_paths.append(text_path)
-        if self.conversion_config.output_format in (CONVERSION_FORMAT_BOTH, CONVERSION_FORMAT_BINARY):
-            write_ccipr60i_binary(binary_path, converted_records)
-            binary_summary = validate_binary_file(binary_path)
-            validation_notes.extend(self._binary_validation_notes(binary_summary))
-            exported_paths.append(binary_path)
+        try:
+            converted_records = [build_record(record, config) for record in source_records]
+            exported_paths: list[Path] = []
+            validation_notes: list[str] = []
+            if config.output_format in (CONVERSION_FORMAT_BOTH, CONVERSION_FORMAT_TEXT):
+                write_text(text_path, converted_records)
+                exported_paths.append(text_path)
+            if config.output_format in (CONVERSION_FORMAT_BOTH, CONVERSION_FORMAT_BINARY):
+                write_binary(binary_path, converted_records)
+                binary_summary = validate_binary(binary_path)
+                validation_notes.extend(self._binary_validation_notes(binary_summary))
+                exported_paths.append(binary_path)
+        except Exception as exc:
+            messagebox.showerror(f"{conversion_name} Export Failed", str(exc), parent=self.root)
+            return
 
+        setattr(self, config_attr, config)
         self.status_var.set(
-            f"CCIPR60I export complete for {len(converted_records)} record(s). "
-            f"Scope: {CONVERSION_SCOPE_REVERSE[self.conversion_config.scope]}. "
-            f"Format: {CONVERSION_FORMAT_REVERSE[self.conversion_config.output_format]}."
+            f"{conversion_name} export complete for {len(converted_records)} record(s). "
+            f"Scope: {CONVERSION_SCOPE_REVERSE[config.scope]}. "
+            f"Format: {CONVERSION_FORMAT_REVERSE[config.output_format]}."
         )
         self.open_export_complete_dialog(target_dir, tuple(exported_paths), tuple(validation_notes))
+
+    def export_ccipr60i(self, config: ConversionConfig | None = None) -> None:
+        active_config = config or self.conversion_config
+        self._export_conversion(
+            conversion_name="CCIPR60I",
+            config=active_config,
+            override_config=self.override_config,
+            config_attr="conversion_config",
+            output_file_names=CONVERSION_OUTPUT_FILE_NAMES,
+            dialog_title="Choose CCIPR60I Export Folder",
+            overwrite_title="Overwrite Existing CCIPR60I Files",
+            overwrite_message="One or more CCIPR60I export files already exist in this folder. Overwrite them and remove stale output files first?",
+            no_eligible_message="No records match the selected CCIPR60I conversion scope.",
+            build_record=build_ccipr60i_record,
+            write_text=write_ccipr60i_text,
+            write_binary=write_ccipr60i_binary,
+            validate_binary=validate_binary_file,
+        )
+
+    def export_ccipr10h(self, config: ConversionConfig | None = None) -> None:
+        active_config = config or self.conversion_10h_config
+        self._export_conversion(
+            conversion_name="CCIPR10H",
+            config=active_config,
+            override_config=self.override_config,
+            config_attr="conversion_10h_config",
+            output_file_names=CONVERSION_10H_OUTPUT_FILE_NAMES,
+            dialog_title="Choose CCIPR10H Export Folder",
+            overwrite_title="Overwrite Existing CCIPR10H Files",
+            overwrite_message="One or more CCIPR10H export files already exist in this folder. Overwrite them and remove stale output files first?",
+            no_eligible_message="No records match the selected CCIPR10H conversion scope.",
+            build_record=build_ccipr10h_record,
+            write_text=write_ccipr10h_text,
+            write_binary=write_ccipr10h_binary,
+            validate_binary=validate_ccipr10h_binary_file,
+        )
 
     def export_results(self) -> None:
         if self.result is None:
@@ -1407,34 +1538,38 @@ class ValidatorApp:
         defects_path = target_dir / "defect_report.csv"
 
         existing_paths = [path for path in self._managed_export_paths(target_dir) if path.exists()]
-        if existing_paths:
-            overwrite = messagebox.askyesno(
-                "Overwrite Existing Export Files",
-                "One or more CNDS export files already exist in this folder. Overwrite them and remove stale output files first?",
-                parent=self.root,
-            )
-            if not overwrite:
-                return
-            for path in existing_paths:
-                path.unlink()
+        try:
+            if existing_paths:
+                overwrite = messagebox.askyesno(
+                    "Overwrite Existing Export Files",
+                    "One or more CNDS export files already exist in this folder. Overwrite them and remove stale output files first?",
+                    parent=self.root,
+                )
+                if not overwrite:
+                    return
+                for path in existing_paths:
+                    path.unlink()
 
-        valid_records, invalid_records, duplicate_records = self._build_export_buckets()
-        review_records = self._review_records()
-        corrected_records = [record.raw_record for record in sorted(review_records, key=self._sort_key)]
+            valid_records, invalid_records, duplicate_records = self._build_export_buckets()
+            review_records = self._review_records()
+            corrected_records = [record.raw_record for record in sorted(review_records, key=self._sort_key)]
 
-        exported_paths: list[Path] = []
-        if self.override_config.export_mode in (OVERRIDE_EXPORT_FULL_ONLY, OVERRIDE_EXPORT_FULL_AND_SPLIT):
-            export_records(corrected_path, corrected_records)
-            exported_paths.append(corrected_path)
+            exported_paths: list[Path] = []
+            if self.override_config.export_mode in (OVERRIDE_EXPORT_FULL_ONLY, OVERRIDE_EXPORT_FULL_AND_SPLIT):
+                export_records(corrected_path, corrected_records)
+                exported_paths.append(corrected_path)
 
-        if self.override_config.export_mode in (OVERRIDE_EXPORT_SPLIT_ONLY, OVERRIDE_EXPORT_FULL_AND_SPLIT):
-            export_records(valid_path, valid_records)
-            export_records(invalid_path, invalid_records)
-            export_records(duplicate_path, duplicate_records)
-            exported_paths.extend((valid_path, invalid_path, duplicate_path))
+            if self.override_config.export_mode in (OVERRIDE_EXPORT_SPLIT_ONLY, OVERRIDE_EXPORT_FULL_AND_SPLIT):
+                export_records(valid_path, valid_records)
+                export_records(invalid_path, invalid_records)
+                export_records(duplicate_path, duplicate_records)
+                exported_paths.extend((valid_path, invalid_path, duplicate_path))
 
-        export_defects_csv_records(defects_path, review_records)
-        exported_paths.append(defects_path)
+            export_defects_csv_records(defects_path, review_records)
+            exported_paths.append(defects_path)
+        except Exception as exc:
+            messagebox.showerror("Export Failed", str(exc), parent=self.root)
+            return
 
         self.open_export_complete_dialog(target_dir, tuple(exported_paths))
 def run() -> None:
