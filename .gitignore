@@ -1,0 +1,11 @@
+build/
+build_fixed/
+dist/
+dist_fixed/
+.build/
+releases/
+*.spec.bak
+__pycache__/
+dist_latest.txt
+docs/CNDS/
+*.egg-info/
