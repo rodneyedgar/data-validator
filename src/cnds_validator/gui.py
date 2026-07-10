@@ -53,6 +53,7 @@ from .validator import (
     DUPLICATE_NAME_DOB,
     DUPLICATE_NAME_DOB_SEX,
     FileValidationResult,
+    InvalidRecordLengthError,
     RecordResult,
     ValidationIssue,
     build_duplicate_key,
@@ -1214,6 +1215,23 @@ class ValidatorApp:
             last_changed_user_id="",
         )
 
+    def clear_loaded_session(self, status_message: str | None = None) -> None:
+        self.selected_paths = []
+        self.result = None
+        self.record_index.clear()
+        self.file_var.set("")
+        self.reset_session_settings()
+        for item in self.records_tree.get_children():
+            self.records_tree.delete(item)
+        for item in self.preview_tree.get_children():
+            self.preview_tree.delete(item)
+        for item in self.defects_tree.get_children():
+            self.defects_tree.delete(item)
+        self.update_action_states()
+        if status_message is None:
+            status_message = "Select one or more CNDS fixed-width files to validate."
+        self.status_var.set(status_message)
+
     def choose_files(self) -> None:
         selected = filedialog.askopenfilenames(title="Select CNDS Files", filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
         if not selected:
@@ -1242,6 +1260,10 @@ class ValidatorApp:
                 ignored_fields=self.selected_ignored_fields,
                 duplicate_mode=self.selected_duplicate_mode,
             )
+        except InvalidRecordLengthError as exc:
+            messagebox.showerror("File Rejected", str(exc))
+            self.clear_loaded_session()
+            return
         except Exception as exc:
             self.result = None
             self.update_action_states()

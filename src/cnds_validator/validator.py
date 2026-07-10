@@ -10,6 +10,18 @@ DUPLICATE_NAME_DOB_SEX = "name_dob_sex"
 DUPLICATE_CODES = {"DUPLICATE_MATCH_KEY"}
 
 
+class InvalidRecordLengthError(ValueError):
+    def __init__(self, source_path: Path, line_number: int, actual_length: int, expected_length: int) -> None:
+        self.source_path = source_path
+        self.line_number = line_number
+        self.actual_length = actual_length
+        self.expected_length = expected_length
+        super().__init__(
+            f"File rejected: invalid record length {actual_length} on line {line_number} in {source_path.name}. "
+            f"A record length of {expected_length} is required."
+        )
+
+
 @dataclass(frozen=True)
 class ValidationIssue:
     source_path: Path
@@ -228,6 +240,8 @@ def validate_files(paths: list[Path], profile: FileProfile, ignored_fields: set[
         text = path.read_text(encoding="utf-8-sig")
         normalized = text.splitlines()
         for line_number, raw_record in enumerate(normalized, start=1):
+            if len(raw_record) != profile.record_length:
+                raise InvalidRecordLengthError(path, line_number, len(raw_record), profile.record_length)
             records.append(validate_record(path, line_number, raw_record, profile, ignored_fields))
 
     duplicate_groups: dict[tuple[str, ...], list[int]] = {}

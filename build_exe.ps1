@@ -94,7 +94,7 @@ Write-Host "Using Python: $pythonExe"
 Write-Host "Release version: $ReleaseVersion"
 Write-Host "Build output: $distRoot"
 
-& $pythonExe -m pip install .[build]
+& $pythonExe -m pip install "pyinstaller>=6.0"
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install build dependencies."
 }

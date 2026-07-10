@@ -6,7 +6,7 @@ This repository contains the initial Windows-focused GUI application for validat
 
 You can launch the app in either of these simple ways:
 
-- double-click [run_app.bat](H:/Users/rodne/OneDrive/Documents/CodeX/Data-Verification/run_app.bat)
+- double-click `run_app.bat`
 - run this PowerShell command from the project folder:
 
 ```powershell
