@@ -12,7 +12,7 @@ from cnds_validator.validator import validate_files
 
 class ConversionScopeRegressionTests(unittest.TestCase):
     def test_valid_and_corrected_scope_uses_same_reviewed_records_for_both_conversions(self) -> None:
-        input_path = Path("docs/CNDS/oas/EDITS/APSR.edit.txt")
+        input_path = Path("tests/fixtures/APSR.edit.txt")
         result = validate_files([input_path], DEFAULT_PROFILE, ignored_fields={"medicaid_id"})
 
         app = ValidatorApp.__new__(ValidatorApp)
