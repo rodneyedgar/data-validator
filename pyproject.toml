@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cnds-validator"
-version = "0.2.2"
+version = "0.2.3"
 description = "Windows GUI for validating CNDS fixed-width files and exporting CCIPR60I conversion files"
 readme = "README.md"
 requires-python = ">=3.11"

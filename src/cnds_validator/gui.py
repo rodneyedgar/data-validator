@@ -89,6 +89,7 @@ EXPORT_OUTPUT_FILE_NAMES = (
     "valid_records.txt",
     "invalid_records.txt",
     "duplicate_records.txt",
+    "duplicate_invalid_records.txt",
     "corrected_full_file.txt",
     "defect_report.csv",
 )
@@ -696,7 +697,7 @@ class ValidatorApp:
 
         notes_frame = ttk.LabelFrame(content, text="Notes", padding=12, style="Card.TLabelframe")
         notes_frame.grid(row=1, column=0, sticky="ew", pady=(16, 0))
-        ttk.Label(notes_frame, text="Overrides are applied during export review. Duplicate records are skipped.", style="Muted.TLabel", wraplength=920).pack(anchor="w")
+        ttk.Label(notes_frame, text="Overrides are applied during export review. Duplicate-only records are skipped. Records that are both duplicate and invalid are exported in the dedicated duplicate_invalid_records.txt file.", style="Muted.TLabel", wraplength=920).pack(anchor="w")
         ttk.Label(notes_frame, text="Records updated by overrides are revalidated before they are written out.", style="Muted.TLabel", wraplength=920).pack(anchor="w", pady=(4, 0))
         ttk.Label(notes_frame, text="Race overrides apply only when the record has a missing or invalid race condition.", style="Muted.TLabel", wraplength=920).pack(anchor="w", pady=(4, 0))
         ttk.Label(notes_frame, text="Uppercase override converts all exported data values to uppercase before the corrected record is written.", style="Muted.TLabel", wraplength=920).pack(anchor="w", pady=(4, 0))
@@ -908,7 +909,8 @@ class ValidatorApp:
         review_records = self._review_records()
         duplicate_records = tuple(record for record in review_records if record.is_duplicate)
         valid_records = tuple(record for record in review_records if record.is_valid)
-        invalid_records = tuple(record for record in review_records if record.is_invalid_non_duplicate)
+        invalid_records = tuple(record for record in review_records if record.is_invalid)
+        duplicate_invalid_records = tuple(record for record in review_records if record.is_duplicate and record.is_invalid)
         duplicate_count = len(duplicate_records)
         duplicate_groups = len(
             {
@@ -929,6 +931,7 @@ class ValidatorApp:
             ("Valid records", str(len(valid_records))),
             ("Invalid records", str(len(invalid_records))),
             ("Duplicate records", str(duplicate_count)),
+            ("Duplicate + invalid", str(len(duplicate_invalid_records))),
             ("Duplicate groups", str(duplicate_groups)),
             ("Duplicate %", f"{duplicate_percentage:.2f}%"),
             ("Total defects", str(sum(len(record.issues) for record in review_records))),
@@ -1144,7 +1147,7 @@ class ValidatorApp:
         review_records = self._review_records(config)
         total_records = len(review_records)
         valid_count = sum(1 for record in review_records if record.is_valid)
-        invalid_count = sum(1 for record in review_records if record.is_invalid_non_duplicate)
+        invalid_count = sum(1 for record in review_records if record.is_invalid)
         duplicate_count = sum(1 for record in review_records if record.is_duplicate)
         duplicate_percentage = (duplicate_count / total_records * 100.0) if total_records else 0.0
         return total_records, valid_count, invalid_count, duplicate_count, duplicate_percentage
@@ -1166,7 +1169,7 @@ class ValidatorApp:
         if self.filter_var.get() == FILTER_VALID:
             records = tuple(record for record in records if record.is_valid)
         elif self.filter_var.get() == FILTER_INVALID:
-            records = tuple(record for record in records if record.is_invalid_non_duplicate)
+            records = tuple(record for record in records if record.is_invalid)
         elif self.filter_var.get() == FILTER_DUPLICATE:
             records = tuple(record for record in records if record.is_duplicate)
         return tuple(sorted(records, key=self._sort_key))
@@ -1409,12 +1412,13 @@ class ValidatorApp:
 
         dialog.wait_window()
 
-    def _build_export_buckets(self) -> tuple[list[str], list[str], list[str]]:
+    def _build_export_buckets(self) -> tuple[list[str], list[str], list[str], list[str]]:
         review_records = self._review_records()
         valid_records = [record.raw_record for record in sorted((record for record in review_records if record.is_valid), key=self._sort_key)]
-        invalid_records = [record.raw_record for record in sorted((record for record in review_records if record.is_invalid_non_duplicate), key=self._sort_key)]
-        duplicate_records = [record.raw_record for record in sorted((record for record in review_records if record.is_duplicate), key=self._sort_key)]
-        return valid_records, invalid_records, duplicate_records
+        invalid_records = [record.raw_record for record in sorted((record for record in review_records if record.is_invalid and not record.is_duplicate), key=self._sort_key)]
+        duplicate_records = [record.raw_record for record in sorted((record for record in review_records if record.is_duplicate and not record.is_invalid), key=self._sort_key)]
+        duplicate_invalid_records = [record.raw_record for record in sorted((record for record in review_records if record.is_duplicate and record.is_invalid), key=self._sort_key)]
+        return valid_records, invalid_records, duplicate_records, duplicate_invalid_records
 
     def _managed_export_paths(self, target_dir: Path) -> tuple[Path, ...]:
         return tuple(target_dir / file_name for file_name in EXPORT_OUTPUT_FILE_NAMES)
@@ -1565,6 +1569,7 @@ class ValidatorApp:
         valid_path = target_dir / "valid_records.txt"
         invalid_path = target_dir / "invalid_records.txt"
         duplicate_path = target_dir / "duplicate_records.txt"
+        duplicate_invalid_path = target_dir / "duplicate_invalid_records.txt"
         corrected_path = target_dir / "corrected_full_file.txt"
         defects_path = target_dir / "defect_report.csv"
 
@@ -1581,7 +1586,7 @@ class ValidatorApp:
                 for path in existing_paths:
                     path.unlink()
 
-            valid_records, invalid_records, duplicate_records = self._build_export_buckets()
+            valid_records, invalid_records, duplicate_records, duplicate_invalid_records = self._build_export_buckets()
             review_records = self._review_records()
             corrected_records = [record.raw_record for record in sorted(review_records, key=self._sort_key)]
 
@@ -1594,7 +1599,8 @@ class ValidatorApp:
                 export_records(valid_path, valid_records)
                 export_records(invalid_path, invalid_records)
                 export_records(duplicate_path, duplicate_records)
-                exported_paths.extend((valid_path, invalid_path, duplicate_path))
+                export_records(duplicate_invalid_path, duplicate_invalid_records)
+                exported_paths.extend((valid_path, invalid_path, duplicate_path, duplicate_invalid_path))
 
             export_defects_csv_records(defects_path, review_records)
             exported_paths.append(defects_path)

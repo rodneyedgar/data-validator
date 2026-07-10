@@ -82,6 +82,20 @@ def validate_alpha_field(value: str) -> list[str]:
     return errors
 
 
+def validate_name_field(value: str) -> list[str]:
+    significant = value.rstrip()
+    if not significant:
+        return []
+    errors: list[str] = []
+    if any("a" <= char <= "z" for char in significant):
+        errors.append("contains lowercase characters")
+    if significant[0] in {" ", "-"}:
+        errors.append("cannot start with a space or hyphen")
+    if any(not (("A" <= char <= "Z") or char in {" ", "-"}) for char in significant):
+        errors.append("must contain only alphabetic characters A-Z, spaces, or hyphens")
+    return errors
+
+
 def validate_middle_initial(value: str) -> list[str]:
     trimmed = value.strip()
     if not trimmed:
@@ -208,7 +222,7 @@ CNDS_SHARED_130 = FileProfile(
             start=24,
             end=53,
             required=True,
-            validators=(validate_alpha_field,),
+            validators=(validate_name_field,),
         ),
         FieldSpec(
             name="first_name",
@@ -216,7 +230,7 @@ CNDS_SHARED_130 = FileProfile(
             start=54,
             end=65,
             required=True,
-            validators=(validate_alpha_field,),
+            validators=(validate_name_field,),
         ),
         FieldSpec(
             name="first_name_filler",

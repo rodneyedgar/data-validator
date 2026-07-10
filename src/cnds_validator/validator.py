@@ -57,6 +57,10 @@ class RecordResult:
         return tuple(issue for issue in self.issues if issue.code not in DUPLICATE_CODES)
 
     @property
+    def has_validation_issues(self) -> bool:
+        return bool(self.non_duplicate_issues)
+
+    @property
     def is_duplicate(self) -> bool:
         return bool(self.duplicate_issues)
 
@@ -73,9 +77,15 @@ class RecordResult:
         return (not self.is_duplicate) and bool(self.non_duplicate_issues)
 
     @property
+    def is_invalid(self) -> bool:
+        return self.has_validation_issues
+
+    @property
     def status_label(self) -> str:
         if self.is_valid:
             return "Valid"
+        if self.is_duplicate and self.has_validation_issues:
+            return "Duplicate + Invalid"
         if self.is_duplicate:
             return "Duplicate"
         return "Invalid"
@@ -106,7 +116,7 @@ class FileValidationResult:
 
     @property
     def invalid_records(self) -> tuple[RecordResult, ...]:
-        return tuple(record for record in self.records if not record.is_valid)
+        return tuple(record for record in self.records if record.is_invalid)
 
     @property
     def invalid_non_duplicate_records(self) -> tuple[RecordResult, ...]:

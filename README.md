@@ -70,7 +70,7 @@ Version 1 / early Phase 2 supports:
 - validating all selected files together in one review session
 - choosing the duplicate comparison rule before validation
 - optionally ignoring validation for selected fields before validation
-- separating valid, invalid, and duplicate outputs without duplicating records across export files
+- separating valid, invalid, duplicate, and duplicate-plus-invalid outputs into dedicated export files
 - sorting the display and exported files by the selected duplicate rule so duplicate groups stay together, even across files
 - exporting valid CNDS records into `CCIPR60I` Person Create format
 - writing `CCIPR60I` output as either UTF-8 text preview, EBCDIC CP037 binary upload, or both
@@ -88,6 +88,7 @@ The interface now includes:
 - a scrollable field-by-field preview panel for the selected record
 - a defects pane that shows only the selected record's defects
 - a Record Status filter for `All Records`, `Valid Records`, `Invalid Records`, and `Duplicate Records`
+- record labels that distinguish `Duplicate + Invalid` from duplicate-only rows
 - summary statistics for total files, total records, duplicate count, and duplicate percentage
 - a `CCIPR60I...` conversion dialog with file-level constants for:
   - Accounting Info
