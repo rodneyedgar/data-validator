@@ -161,11 +161,6 @@ class ValidatorApp:
         self.help_button = ttk.Button(controls, text="Help", command=self.open_keyboard_help_dialog, underline=0)
         self.help_button.grid(row=0, column=10, padx=4)
 
-        profile_frame = ttk.LabelFrame(root_frame, text="Profile", padding=12, style="Card.TLabelframe")
-        profile_frame.pack(fill="x", pady=(12, 0))
-        ttk.Label(profile_frame, text=f"{self.profile.name} | Expected record length: {self.profile.record_length}", style="App.TLabel").pack(anchor="w")
-        ttk.Label(profile_frame, text=self.profile.notes, wraplength=1320, style="Muted.TLabel").pack(anchor="w", pady=(6, 0))
-
         status_frame = ttk.Frame(root_frame, style="App.TFrame")
         status_frame.pack(fill="x", pady=(12, 0))
         ttk.Label(status_frame, textvariable=self.status_var, style="Muted.TLabel").pack(anchor="w")
@@ -458,25 +453,39 @@ class ValidatorApp:
 
     def open_keyboard_help_dialog(self) -> None:
         dialog, close_dialog = self._create_modal_dialog(
-            "Keyboard Commands",
-            620,
-            520,
+            "Help",
+            860,
+            760,
             resizable=(False, False),
-            min_width=620,
-            min_height=520,
+            min_width=860,
+            min_height=760,
         )
 
         frame = ttk.Frame(dialog, padding=16, style="App.TFrame")
         frame.pack(fill="both", expand=True)
 
-        ttk.Label(frame, text="Keyboard Commands", style="App.TLabel").pack(anchor="w")
+        profile_frame = ttk.LabelFrame(frame, text="Profile", padding=12, style="Card.TLabelframe")
+        profile_frame.pack(fill="x")
+        ttk.Label(
+            profile_frame,
+            text=f"{self.profile.name} | Expected record length: {self.profile.record_length}",
+            style="App.TLabel",
+        ).pack(anchor="w")
+        ttk.Label(
+            profile_frame,
+            text=self.profile.notes,
+            wraplength=700,
+            style="Muted.TLabel",
+        ).pack(anchor="w", pady=(6, 0))
+
+        ttk.Label(frame, text="Keyboard Commands", style="App.TLabel").pack(anchor="w", pady=(16, 0))
         ttk.Label(frame, text="Use these shortcuts to work through the app without a mouse.", style="Muted.TLabel").pack(anchor="w", pady=(4, 12))
 
-        help_tree = ttk.Treeview(frame, columns=("command", "action"), show="headings", height=10, takefocus=False)
+        help_tree = ttk.Treeview(frame, columns=("command", "action"), show="headings", height=8, takefocus=False)
         help_tree.heading("command", text="Command", anchor="w")
         help_tree.heading("action", text="Action", anchor="w")
-        help_tree.column("command", width=140, anchor="w")
-        help_tree.column("action", width=420, anchor="w")
+        help_tree.column("command", width=170, anchor="w")
+        help_tree.column("action", width=620, anchor="w")
         help_tree.pack(fill="both", expand=True)
 
         help_rows = (
